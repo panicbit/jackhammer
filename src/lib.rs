@@ -5,7 +5,7 @@ use std::{
     future::Future,
 };
 
-pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + Sync + 'a>>;
+pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 type Action = Box<dyn FnMut() -> BoxFuture<'static, ()> + Send + Sync + 'static>;
 
 pub struct Jackhammer {
@@ -62,7 +62,7 @@ impl JackhammerBuilder {
     pub fn action<F, Fut, R>(mut self, mut action: F) -> Self
     where
         F: FnMut() -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = R> + Send + Sync + 'static,
+        Fut: Future<Output = R> + Send + 'static,
     {
         self.action = Box::new(move || {
             let action = action();
