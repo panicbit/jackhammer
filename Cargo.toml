@@ -3,8 +3,10 @@ name = "jackhammer"
 version = "0.1.0"
 authors = ["panicbit <panicbit.dev@gmail.com>"]
 edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+description = "Tooling for creating custom load and stress tests"
+license = "Apache-2.0/MIT"
+documentation = "https://docs.rs/jackhammer"
+repository = "https://github.com/panicbit/jackhammer"
 
 [dependencies]
 anyhow = "1.0.32"
