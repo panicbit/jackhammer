@@ -6,12 +6,11 @@ use std::{
 };
 
 pub type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
-type Action = Box<dyn FnMut() -> BoxFuture<'static, ()> + Send + Sync + 'static>;
 
 pub struct Jackhammer {
     interval: Interval,
     actions_per_interval: u32,
-    action: Action,
+    action_factory: Box<dyn ActionFactory>,
 }
 
 impl Jackhammer {
@@ -24,9 +23,10 @@ impl Jackhammer {
             self.interval.tick().await;
 
             for _ in 0..self.actions_per_interval {
-                let action = (self.action)();
+                let action = self.action_factory.next_action();
 
                 tokio::spawn(async move {
+                    // TODO: use result outcome for metrics
                     action.await;
                 });
             }
@@ -37,7 +37,7 @@ impl Jackhammer {
 pub struct JackhammerBuilder {
     actions_per_interval: u32,
     interval: Duration,
-    action: Action,
+    action_factory: Box<dyn ActionFactory>,
 }
 
 impl JackhammerBuilder {
@@ -45,7 +45,7 @@ impl JackhammerBuilder {
         Self {
             actions_per_interval: 1,
             interval: Duration::from_secs(1),
-            action: Box::new(|| Box::pin(async {})),
+            action_factory: Box::new(|| Box::pin(async { Ok(()) })),
         }
     }
 
@@ -59,18 +59,11 @@ impl JackhammerBuilder {
         self
     }
 
-    pub fn action<F, Fut, R>(mut self, mut action: F) -> Self
+    pub fn action_factory<AF>(mut self, action_factory: AF) -> Self
     where
-        F: FnMut() -> Fut + Send + Sync + 'static,
-        Fut: Future<Output = R> + Send + 'static,
+        AF: ActionFactory + Send + Sync,
     {
-        self.action = Box::new(move || {
-            let action = action();
-
-            Box::pin(async move {
-                action.await;
-            })
-        });
+        self.action_factory = Box::new(action_factory);
         self
     }
 
@@ -78,7 +71,7 @@ impl JackhammerBuilder {
         let jackhammer = Jackhammer {
             interval: time::interval(self.interval),
             actions_per_interval: self.actions_per_interval,
-            action: self.action,
+            action_factory: self.action_factory,
         };
 
         let join_handle = tokio::spawn(jackhammer.run());
@@ -86,6 +79,30 @@ impl JackhammerBuilder {
         JackhammerHandle {
             join_handle
         }
+    }
+}
+
+pub trait ActionFactory: Send + 'static {
+    fn next_action(&mut self) -> BoxFuture<'static, Result<()>>;
+}
+
+impl dyn ActionFactory {
+    pub fn from_fn<F, Fut>(factory_fn: F) -> impl ActionFactory
+    where
+        F: FnMut() -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<()>> + Send + 'static,
+    {
+        factory_fn
+    }
+}
+
+impl<F, Fut> ActionFactory for F
+where
+    F: FnMut() -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Result<()>> + Send + 'static,
+{
+    fn next_action(&mut self) -> BoxFuture<'static, Result<()>> {
+        Box::pin(self())
     }
 }
 
