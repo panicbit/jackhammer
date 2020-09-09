@@ -168,13 +168,17 @@ impl Metrics {
     where
         AP: AggregatesProcessors,
     {
-        let mut cockpit = Cockpit::without_name();
+        let mut cockpit = Cockpit::new("jackhammer");
 
         let panel = Panel::named(Metric::SuccessfulActions, "successful_actions")
             .meter(Meter::new_with_defaults("per_second"))
             .histogram(
                 Histogram::new_with_defaults("latency_us")
                 .display_time_unit(TimeUnit::Microseconds)
+            )
+            .histogram(
+                Histogram::new_with_defaults("latency_ms")
+                .display_time_unit(TimeUnit::Milliseconds)
             );
         cockpit.add_panel(panel);
 
@@ -183,6 +187,10 @@ impl Metrics {
             .histogram(
                 Histogram::new_with_defaults("latency_us")
                 .display_time_unit(TimeUnit::Microseconds)
+            )
+            .histogram(
+                Histogram::new_with_defaults("latency_ms")
+                .display_time_unit(TimeUnit::Milliseconds)
             );
         cockpit.add_panel(panel);
 
@@ -191,6 +199,10 @@ impl Metrics {
             .histogram(
                 Histogram::new_with_defaults("latency_us")
                 .display_time_unit(TimeUnit::Microseconds)
+            )
+            .histogram(
+                Histogram::new_with_defaults("latency_ms")
+                .display_time_unit(TimeUnit::Milliseconds)
             );
         panel.set_description("Actions that succeeded, failed or timed out");
         cockpit.add_panel(panel);
@@ -200,10 +212,14 @@ impl Metrics {
             .histogram(
                 Histogram::new_with_defaults("latency_us")
                 .display_time_unit(TimeUnit::Microseconds)
+            )
+            .histogram(
+                Histogram::new_with_defaults("latency_ms")
+                .display_time_unit(TimeUnit::Milliseconds)
             );
         cockpit.add_panel(panel);
 
-        let panel = Panel::named(Metric::TimedOutActions, "spawned_actions")
+        let panel = Panel::named(Metric::SpawnedActions, "spawned_actions")
             .gauge(Gauge::new_with_defaults("count"));
         cockpit.add_panel(panel);
 
@@ -227,17 +243,17 @@ impl Metrics {
     }
 
     fn observed_finished_action(&self, duration: Duration) {
+        let now = std::time::Instant::now();
+
         if let Some(tx) = &self.telemetry_transmitter {
-            tx.observed_one_duration_now(Metric::FinishedActions, duration);
+            tx.observed_duration(Metric::FinishedActions, duration, now);
+            tx.observed_one_value(Metric::SpawnedActions, metrix::Decrement, now);
         }
     }
 
     fn observed_timed_out_action(&self, duration: Duration) {
-        let now = std::time::Instant::now();
-
         if let Some(tx) = &self.telemetry_transmitter {
-            tx.observed_duration(Metric::TimedOutActions, duration, now);
-            tx.observed_one_value(Metric::SpawnedActions, metrix::Decrement, now);
+            tx.observed_one_duration_now(Metric::TimedOutActions, duration);
         }
     }
 
