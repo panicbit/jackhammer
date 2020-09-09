@@ -190,7 +190,7 @@ impl Metrics {
                 Histogram::new_with_defaults("latency_us")
                 .display_time_unit(TimeUnit::Microseconds)
             );
-        panel.set_description("Actions that succeeded or failed. Timed out actions are not included.");
+        panel.set_description("Actions that succeeded, failed or timed out");
         cockpit.add_panel(panel);
 
         let panel = Panel::named(Metric::TimedOutActions, "timed_out_actions")
