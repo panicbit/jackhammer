@@ -10,6 +10,7 @@ repository = "https://github.com/panicbit/jackhammer"
 
 [dependencies]
 anyhow = "1.0.32"
+metrix = "0.13.8"
 
 [dependencies.tokio]
 version = "0.2.22"
