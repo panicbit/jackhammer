@@ -7,7 +7,7 @@ use metrix::{
     TelemetryTransmitter,
     instruments::{Panel, Cockpit},
     processor::{TelemetryProcessor, AggregatesProcessors},
-instruments::Meter, TransmitsTelemetryData, instruments::Histogram, TimeUnit};
+instruments::Meter, TransmitsTelemetryData, instruments::Histogram, TimeUnit, instruments::Gauge};
 use tokio::{
     task::JoinHandle,
     time::{self, *},
@@ -48,6 +48,8 @@ impl Jackhammer {
 
                     metrics.observed_finished_action(start.elapsed());
                 });
+
+                self.metrics.observed_spawned_action();
             }
         }
     }
@@ -201,6 +203,10 @@ impl Metrics {
             );
         cockpit.add_panel(panel);
 
+        let panel = Panel::named(Metric::TimedOutActions, "spawned_actions")
+            .gauge(Gauge::new_with_defaults("count"));
+        cockpit.add_panel(panel);
+
         let (tx, mut rx) = TelemetryProcessor::new_pair_without_name();
         rx.add_cockpit(cockpit);
         aggregator.add_processor(rx);
@@ -227,8 +233,17 @@ impl Metrics {
     }
 
     fn observed_timed_out_action(&self, duration: Duration) {
+        let now = std::time::Instant::now();
+
         if let Some(tx) = &self.telemetry_transmitter {
-            tx.observed_one_duration_now(Metric::TimedOutActions, duration);
+            tx.observed_duration(Metric::TimedOutActions, duration, now);
+            tx.observed_one_value(Metric::SpawnedActions, metrix::Decrement, now);
+        }
+    }
+
+    fn observed_spawned_action(&self) {
+        if let Some(tx) = &self.telemetry_transmitter {
+            tx.observed_one_value_now(Metric::SpawnedActions, metrix::Increment);
         }
     }
 }
@@ -239,6 +254,7 @@ enum Metric {
     FailedActions,
     FinishedActions,
     TimedOutActions,
+    SpawnedActions,
 }
 
 async fn timeout<T>(duration: Option<Duration>, future: impl Future<Output = T>) -> Result<T, time::Elapsed> {
