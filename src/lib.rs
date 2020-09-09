@@ -19,6 +19,7 @@ pub struct Jackhammer {
     interval: Interval,
     actions_per_interval: u32,
     action_factory: Box<dyn ActionFactory>,
+    timeout: Option<Duration>,
     metrics: Metrics,
 }
 
@@ -33,14 +34,16 @@ impl Jackhammer {
 
             for _ in 0..self.actions_per_interval {
                 let action = self.action_factory.next_action();
+                let action = timeout(self.timeout, action);
                 let metrics = self.metrics.clone();
 
                 tokio::spawn(async move {
                     let start = Instant::now();
 
                     match action.await {
-                        Ok(_) => metrics.observed_successful_action(start.elapsed()),
-                        Err(_) => metrics.observed_failed_action(start.elapsed()),
+                        Ok(Ok(_)) => metrics.observed_successful_action(start.elapsed()),
+                        Ok(Err(_)) =>  metrics.observed_failed_action(start.elapsed()),
+                        Err(_) => metrics.observed_timed_out_action(start.elapsed()),
                     }
 
                     metrics.observed_finished_action(start.elapsed());
@@ -55,6 +58,7 @@ pub struct JackhammerBuilder {
     interval: Duration,
     action_factory: Box<dyn ActionFactory>,
     metrics: Metrics,
+    timeout: Option<Duration>,
 }
 
 impl JackhammerBuilder {
@@ -64,6 +68,7 @@ impl JackhammerBuilder {
             interval: Duration::from_secs(1),
             action_factory: Box::new(|| Box::pin(async { Ok(()) })),
             metrics: Metrics::default(),
+            timeout: None,
         }
     }
 
@@ -85,6 +90,11 @@ impl JackhammerBuilder {
         self
     }
 
+    pub fn timeout(mut self, timeout: impl Into<Option<Duration>>) -> Self {
+        self.timeout = timeout.into();
+        self
+    }
+
     /// Should be called at most once
     pub fn instrumentation<AP>(mut self, aggregator: &mut AP) -> Self
     where
@@ -100,6 +110,7 @@ impl JackhammerBuilder {
             actions_per_interval: self.actions_per_interval,
             action_factory: self.action_factory,
             metrics: self.metrics,
+            timeout: self.timeout,
         };
 
         let join_handle = tokio::spawn(jackhammer.run());
@@ -173,7 +184,16 @@ impl Metrics {
             );
         cockpit.add_panel(panel);
 
-        let panel = Panel::named(Metric::FinishedActions, "finished_actions")
+        let mut panel = Panel::named(Metric::FinishedActions, "finished_actions")
+            .meter(Meter::new_with_defaults("per_second"))
+            .histogram(
+                Histogram::new_with_defaults("latency_us")
+                .display_time_unit(TimeUnit::Microseconds)
+            );
+        panel.set_description("Actions that succeeded or failed. Timed out actions are not included.");
+        cockpit.add_panel(panel);
+
+        let panel = Panel::named(Metric::TimedOutActions, "timed_out_actions")
             .meter(Meter::new_with_defaults("per_second"))
             .histogram(
                 Histogram::new_with_defaults("latency_us")
@@ -205,6 +225,12 @@ impl Metrics {
             tx.observed_one_duration_now(Metric::FinishedActions, duration);
         }
     }
+
+    fn observed_timed_out_action(&self, duration: Duration) {
+        if let Some(tx) = &self.telemetry_transmitter {
+            tx.observed_one_duration_now(Metric::TimedOutActions, duration);
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Copy, Clone)]
@@ -212,4 +238,12 @@ enum Metric {
     SuccessfulActions,
     FailedActions,
     FinishedActions,
+    TimedOutActions,
+}
+
+async fn timeout<T>(duration: Option<Duration>, future: impl Future<Output = T>) -> Result<T, time::Elapsed> {
+    match duration {
+        Some(duration) => time::timeout(duration, future).await,
+        None => Ok(future.await),
+    }
 }
