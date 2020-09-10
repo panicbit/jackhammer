@@ -1,6 +1,6 @@
 [package]
 name = "jackhammer"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["panicbit <panicbit.dev@gmail.com>"]
 edition = "2018"
 description = "Tooling for creating custom load and stress tests"
