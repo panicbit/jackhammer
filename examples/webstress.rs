@@ -79,6 +79,6 @@ async fn main() -> Result<()> {
 
         // println!("{}", snapshot);
 
-        delay_for(Duration::from_secs(1)).await;
+        sleep(Duration::from_secs(1)).await;
     }
 }

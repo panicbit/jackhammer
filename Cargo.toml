@@ -1,6 +1,6 @@
 [package]
 name = "jackhammer"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["panicbit <panicbit.dev@gmail.com>"]
 edition = "2018"
 description = "Tooling for creating custom load and stress tests"
@@ -9,14 +9,11 @@ documentation = "https://docs.rs/jackhammer"
 repository = "https://github.com/panicbit/jackhammer"
 
 [dependencies]
-anyhow = "1.0.32"
-metrix = "0.13.8"
-
-[dependencies.tokio]
-version = "0.2.22"
-features = ["full"]
+anyhow = "1.0.38"
+metrix = "0.13.12"
+tokio = { version = "1.0.0", features = ["full"] }
 
 [dev-dependencies]
 termion = "1.5.5"
-reqwest = "0.10.8"
+reqwest = "0.11.0"
 structopt = "0.3.17"

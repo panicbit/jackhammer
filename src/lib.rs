@@ -273,7 +273,7 @@ enum Metric {
     SpawnedActions,
 }
 
-async fn timeout<T>(duration: Option<Duration>, future: impl Future<Output = T>) -> Result<T, time::Elapsed> {
+async fn timeout<T>(duration: Option<Duration>, future: impl Future<Output = T>) -> Result<T, time::error::Elapsed> {
     match duration {
         Some(duration) => time::timeout(duration, future).await,
         None => Ok(future.await),
